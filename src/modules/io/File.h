@@ -37,8 +37,8 @@ protected:
 	core::String _rawPath;
 	FileMode _mode;
 
-	File(const core::String& rawPath, FileMode mode);
 public:
+	File(const core::String& rawPath, FileMode mode = FileMode::Read);
 	virtual ~File();
 
 	/**
