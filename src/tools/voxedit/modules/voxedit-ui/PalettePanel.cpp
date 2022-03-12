@@ -3,9 +3,11 @@
  */
 
 #include "PalettePanel.h"
+#include "IMGUIApp.h"
 #include "core/StringUtil.h"
 #include "voxedit-util/SceneManager.h"
 #include "ui/imgui/IMGUIEx.h"
+#include <glm/gtc/type_ptr.hpp>
 
 #define POPUP_TITLE_LOAD_PALETTE "Select Palette##popuptitle"
 #define PALETTEACTIONPOPUP "##paletteactionpopup"
@@ -63,9 +65,17 @@ void PalettePanel::update(const char *title, command::CommandExecutionListener &
 
 			drawList->AddRectFilled(v1, v2, palette.colors[palIdx]);
 
+			static glm::vec4 color;
+			color = core::Color::fromRGBA(palette.colors[palIdx]);
 			const core::String &id = core::string::format("##palitem-%i", palIdx);
 			if (ImGui::InvisibleButton(id.c_str(), colorButtonSize)) {
-				sceneMgr().modifier().setCursorVoxel(voxel::createVoxel(voxel::VoxelType::Generic, palIdx));
+				voxel::VoxelType type;
+				if (color.a < 1.0f) {
+					type = voxel::VoxelType::Transparent;
+				} else {
+					type = voxel::VoxelType::Generic;
+				}
+				sceneMgr().modifier().setCursorVoxel(voxel::createVoxel(type, palIdx));
 			}
 			const core::String &contextMenuId = core::string::format("Actions##context-palitem-%i", palIdx);
 			if (ImGui::BeginPopupContextItem(contextMenuId.c_str())) {
@@ -80,6 +90,12 @@ void PalettePanel::update(const char *title, command::CommandExecutionListener &
 						palette.setGlow(palIdx);
 					}
 				}
+				if (ImGui::ColorEdit4("Color", glm::value_ptr(color), ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_Float)) {
+					palette.colors[palIdx] = core::Color::getRGBA(color);
+					palette.markDirty();
+					palette.markSave();
+				}
+
 				ImGui::EndPopup();
 			}
 			if (!colorHovered && ImGui::IsItemHovered()) {
@@ -112,6 +128,7 @@ void PalettePanel::update(const char *title, command::CommandExecutionListener &
 			ImGui::OpenPopup(POPUP_TITLE_LOAD_PALETTE);
 		}
 
+		static const char *builtIn[] = {"built-in:minecraft", "built-in:magicavoxel"};
 		if (ImGui::BeginPopupModal(POPUP_TITLE_LOAD_PALETTE, nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
 			ImGui::TextUnformatted("Select the palette");
 			ImGui::Separator();
@@ -121,10 +138,21 @@ void PalettePanel::update(const char *title, command::CommandExecutionListener &
 						_currentSelectedPalette = palette;
 					}
 				}
+				for (int i = 0; i < lengthof(builtIn); ++i) {
+					if (ImGui::Selectable(builtIn[i], builtIn[i] == _currentSelectedPalette)) {
+						_currentSelectedPalette = builtIn[i];
+					}
+				}
 				ImGui::EndCombo();
 			}
 			if (ImGui::Button(ICON_FA_CHECK " OK##loadpalette")) {
-				sceneMgr().loadPalette(_currentSelectedPalette);
+				if (_currentSelectedPalette == builtIn[0]) {
+					palette.minecraft();
+				} else if (_currentSelectedPalette == builtIn[1]) {
+					palette.magicaVoxel();
+				} else {
+					sceneMgr().loadPalette(_currentSelectedPalette);
+				}
 				ImGui::CloseCurrentPopup();
 			}
 			ImGui::SameLine();
@@ -134,6 +162,16 @@ void PalettePanel::update(const char *title, command::CommandExecutionListener &
 			// TODO: link to docu on how to add new palettes
 			ImGui::SetItemDefaultFocus();
 			ImGui::EndPopup();
+		}
+
+		if (palette.needsSave()) {
+			if (ImGui::Button(ICON_FA_SAVE " Save##savepalette")) {
+				if (!palette.save()) {
+					imguiApp()->saveDialog([&](const core::String &file) { palette.save(file.c_str()); });
+				}
+				palette.markSaved();
+			}
+			ImGui::TooltipText("Save the modified palette");
 		}
 	}
 	ImGui::End();

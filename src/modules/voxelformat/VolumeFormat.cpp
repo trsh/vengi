@@ -60,7 +60,7 @@ const io::FormatDescription SUPPORTED_VOXEL_FORMATS_LOAD[] = {
 			|| magic == FourCC('V','X','R','1');}, 0u},
 	{"BinVox", "binvox", [] (uint32_t magic) {return magic == FourCC('#','b','i','n');}, 0u},
 	{"Goxel", "gox", [] (uint32_t magic) {return magic == FourCC('G','O','X',' ');}, VOX_FORMAT_FLAG_SCREENSHOT_EMBEDDED},
-	{"CubeWorld", "cub", nullptr, 0u},
+	{"CubeWorld", "cub", nullptr, VOX_FORMAT_FLAG_PALETTE_EMBEDDED},
 	{"Minecraft region", "mca", nullptr, VOX_FORMAT_FLAG_PALETTE_EMBEDDED},
 	{"Sproxel csv", "csv", nullptr, 0u},
 	{"Wavefront Object", "obj", nullptr, 0u},
@@ -68,7 +68,7 @@ const io::FormatDescription SUPPORTED_VOXEL_FORMATS_LOAD[] = {
 	{"Build engine", "kvx", nullptr, VOX_FORMAT_FLAG_PALETTE_EMBEDDED},
 	{"Ace of Spades", "kv6", [] (uint32_t magic) {return magic == FourCC('K','v','x','l');}, VOX_FORMAT_FLAG_PALETTE_EMBEDDED},
 	{"Tiberian Sun", "vxl", [] (uint32_t magic) {return magic == FourCC('V','o','x','e');}, VOX_FORMAT_FLAG_PALETTE_EMBEDDED},
-	{"AceOfSpades", "vxl", nullptr, 0u},
+	{"AceOfSpades", "vxl", nullptr, VOX_FORMAT_FLAG_PALETTE_EMBEDDED},
 	{"Qubicle Exchange", "qef", [] (uint32_t magic) {return magic == FourCC('Q','u','b','i');}, 0u},
 	{"Chronovox", "csm", [] (uint32_t magic) {return magic == FourCC('.','C','S','M');}, 0u},
 	{"Nicks Voxel Model", "nvm", [] (uint32_t magic) {return magic == FourCC('.','N','V','M');}, 0u},
@@ -91,6 +91,7 @@ const io::FormatDescription SUPPORTED_VOXEL_FORMATS_SAVE[] = {
 	//{"Build engine", "kvx", nullptr, 0u},
 	{"Tiberian Sun", "vxl", nullptr, 0u},
 	{"Qubicle Exchange", "qef", nullptr, 0u},
+	{"AceOfSpades", "vxl", nullptr, 0u}, // TODO: handle duplicate extension
 	{"Wavefront Object", "obj", nullptr, VOX_FORMAT_FLAG_MESH},
 	{"Polygon File Format", "ply", nullptr, VOX_FORMAT_FLAG_MESH},
 	{"Standard Triangle Language", "stl", nullptr, VOX_FORMAT_FLAG_MESH},
@@ -259,6 +260,7 @@ bool loadFormat(const core::String &fileName, io::SeekableReadStream& stream, vo
 		Log::error("Failed to load model file %s. Broken file.", fileName.c_str());
 		return false;
 	}
+	//newSceneGraph.node(newSceneGraph.root().id()).setProperty("Type", desc->name);
 	Log::info("Load model file %s with %i layers", fileName.c_str(), (int)newSceneGraph.size());
 	return true;
 }
@@ -285,12 +287,15 @@ bool saveFormat(const io::FilePtr& filePtr, voxel::SceneGraph& sceneGraph) {
 		return false;
 	}
 
+	const core::String& type = sceneGraph.root().property("Type");
+	Log::info("Save '%s' file to '%s'", type.c_str(), filePtr->name().c_str());
 	io::FileStream stream(filePtr);
 	const core::String& ext = filePtr->extension();
 	for (const io::FormatDescription *desc = voxelformat::SUPPORTED_VOXEL_FORMATS_SAVE; desc->ext != nullptr; ++desc) {
-		if (ext == desc->ext) {
+		if (ext == desc->ext /*&& (type.empty() || type == desc->name)*/) {
 			core::SharedPtr<voxel::Format> f = getFormat(desc, 0u);
 			if (f && f->saveGroups(sceneGraph, filePtr->name(), stream)) {
+				Log::debug("Saved file for format '%s' (ext: '%s')", desc->name, desc->ext);
 				return true;
 			}
 		}

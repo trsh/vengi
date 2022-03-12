@@ -12,7 +12,7 @@ Known [issues](https://github.com/mgerhardy/vengi/issues?q=is%3Aissue+is%3Aopen+
 
 General:
 
-   - Removed minecraft support via external lib enkiMI
+   - Replaced minecraft support with own implementation
    - Added support for Sandbox VXA format (via VXR) and improved VXR
    - Allow to change the ui colors via cvar (`ui_style`)
    - Added bloom render support for vox and vxm
@@ -22,6 +22,9 @@ General:
    - Allow to save the MATL chunk in magicavoxel vox files
    - Ability to scale exported mesh with different values for each axis
    - Added stl voxelization support
+   - Allow to modify the camera zoom min/max values
+   - Allow to load different sizes for AoS VXL files
+   - Lerp the camera zooming
 
 VoxEdit:
 
@@ -32,6 +35,8 @@ VoxEdit:
    - Removed noise panel (use the lua scripts for noise support)
    - Fixed a lot of undo/redo cases and improved the test cases a lot
    - Fixed viewport screenshot creation (now also bound to F5)
+   - Added dialog to configure the mesh and voxel format settings for loading/saving
+   - Improved the palette panel
 
 ## 0.0.18 (2022-02-12)
 

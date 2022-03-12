@@ -8,20 +8,112 @@
 #include "core/Log.h"
 #include "core/String.h"
 #include "core/StringUtil.h"
-#include "core/collection/Array.h"
 #include "image/Image.h"
 #include "io/File.h"
 #include "io/Filesystem.h"
 #include "math/Math.h"
+#include <SDL_endian.h>
+#include <float.h>
 
 namespace voxel {
 
+bool Palette::addColorToPalette(uint32_t rgba, bool skipSimilar) {
+	for (int i = 0; i < colorCount; ++i) {
+		if (colors[i] == rgba) {
+			return false;
+		}
+	}
+	static constexpr float MaxThreshold = 0.00014f;
+	if (skipSimilar) {
+		for (int i = 0; i < colorCount; ++i) {
+			const float dist = core::Color::getDistance(colors[i], rgba);
+			if (dist < MaxThreshold) {
+				return false;
+			}
+		}
+	}
+
+	if (colorCount < PaletteMaxColors) {
+		colors[colorCount++] = rgba;
+		return true;
+	}
+
+	// now we are looking for the color in the existing palette entries that is most similar
+	// to other entries in the palette. If this entry is than above a certain threshold, we
+	// will replace that color with the new rgba value
+	int bestIndex = -1;
+	float bestColorDistance = FLT_MAX;
+	for (int i = 0; i < colorCount; ++i) {
+		float colorDistance;
+		const int closestColorIdx = getClosestMatch(colors[i], &colorDistance, i);
+		if (colorDistance < bestColorDistance) {
+			bestColorDistance = colorDistance;
+			bestIndex = closestColorIdx;
+		}
+	}
+	if (bestIndex != -1) {
+		const float dist = core::Color::getDistance(colors[bestIndex], rgba);
+		if (dist > MaxThreshold) {
+			colors[bestIndex] = rgba;
+			return true;
+		}
+	}
+	return false;
+}
+
+int Palette::getClosestMatch(const glm::vec4& color, float *distance, int skip) const {
+	if (size() == 0) {
+		return -1;
+	}
+
+	float minDistance = FLT_MAX;
+	int minIndex = -1;
+
+	float hue;
+	float saturation;
+	float brightness;
+	core::Color::getHSB(color, hue, saturation, brightness);
+
+	for (int i = 0; i < colorCount; ++i) {
+		if (i == skip) {
+			continue;
+		}
+		const float val = core::Color::getDistance(colors[i], hue, saturation, brightness);
+		if (val < minDistance) {
+			minDistance = val;
+			minIndex = (int)i;
+		}
+	}
+	if (distance) {
+		*distance = minDistance;
+	}
+	return minIndex;
+}
+
+int Palette::getClosestMatch(const uint32_t rgba, float *distance, int skip) const {
+	for (int i = 0; i < colorCount; ++i) {
+		if (i == skip) {
+			continue;
+		}
+		if (colors[i] == rgba) {
+			return (int)i;
+		}
+	}
+	return getClosestMatch(core::Color::fromRGBA(rgba), distance, skip);
+}
+
 bool Palette::save(const char *name) {
+	if (name == nullptr || name[0] == '\0') {
+		if (_paletteFilename.empty()) {
+			return false;
+		}
+		name = _paletteFilename.c_str();
+	}
 	image::Image img(name);
-	Log::info("Export palette to %s", name);
+	Log::info("Save palette to %s", name);
 	img.loadRGBA((const uint8_t *)colors, sizeof(colors), lengthof(colors), 1);
 	if (!img.writePng()) {
-		Log::warn("Failed to write the palette file");
+		Log::warn("Failed to write the palette file '%s'", name);
 		return false;
 	}
 	return true;
@@ -44,6 +136,7 @@ bool Palette::load(const uint8_t *rgbaBuf, size_t bufsize) {
 	if (!img->loadRGBA(rgbaBuf, ncolors * 4, ncolors, 1)) {
 		return false;
 	}
+	_paletteFilename = "";
 	return load(img);
 }
 
@@ -63,7 +156,7 @@ bool Palette::load(const image::ImagePtr &img) {
 		colors[i] = *(uint32_t *)img->at(i, 0);
 	}
 	for (int i = colorCount; i < PaletteMaxColors; ++i) {
-		colors[i] = core::Color::getRGBA(0, 0, 0, 255);
+		colors[i] = core::Color::getRGBA(0, 0, 0);
 	}
 	_dirty = true;
 	Log::debug("Set up %i material colors", colorCount);
@@ -91,11 +184,12 @@ bool Palette::load(const char *paletteName) {
 	} else {
 		lua = "";
 	}
+	_paletteFilename = paletteFile->name();
 	return load(img);
 }
 
 bool Palette::minecraft() {
-	static const uint32_t palette[PaletteMaxColors] = {
+	uint32_t palette[PaletteMaxColors] = {
 		0xff000000, 0xff7d7d7d, 0xff4cb376, 0xff436086, 0xff7a7a7a, 0xff4e7f9c, 0xff256647, 0xff535353, 0xffdcaf70,
 		0xffdcaf70, 0xff135bcf, 0xff125ad4, 0xffa0d3db, 0xff7a7c7e, 0xff7c8b8f, 0xff7e8287, 0xff737373, 0xff315166,
 		0xff31b245, 0xff54c3c2, 0xfff4f0da, 0xff867066, 0xff894326, 0xff838383, 0xff9fd3dc, 0xff324364, 0xff3634b4,
@@ -125,11 +219,17 @@ bool Palette::minecraft() {
 		0xfff0f0f0, 0xfff0f0f0, 0xfff0f0f0, 0xfff0f0f0, 0xfff0f0f0, 0xfff0f0f0, 0xfff0f0f0, 0xfff0f0f0, 0xfff0f0f0,
 		0xfff0f0f0, 0xfff0f0f0, 0xfff0f0f0, 0xfff0f0f0, 0xfff0f0f0, 0xfff0f0f0, 0xfff0f0f0, 0xfff0f0f0, 0xfff0f0f0,
 		0xfff0f0f0, 0xfff0f0f0, 0xfff0f0f0, 0xff242132};
+
+	uint32_t *swapBuf = palette;
+	for (int i = 0; i < lengthof(palette); ++i) {
+		swapBuf[i] = SDL_SwapLE32(swapBuf[i]);
+	}
+
 	return load((const uint8_t *)palette, sizeof(palette));
 }
 
 bool Palette::magicaVoxel() {
-	static const uint32_t palette[PaletteMaxColors] = {
+	uint32_t palette[PaletteMaxColors] = {
 		0x00000000, 0xffffffff, 0xffccffff, 0xff99ffff, 0xff66ffff, 0xff33ffff, 0xff00ffff, 0xffffccff, 0xffccccff,
 		0xff99ccff, 0xff66ccff, 0xff33ccff, 0xff00ccff, 0xffff99ff, 0xffcc99ff, 0xff9999ff, 0xff6699ff, 0xff3399ff,
 		0xff0099ff, 0xffff66ff, 0xffcc66ff, 0xff9966ff, 0xff6666ff, 0xff3366ff, 0xff0066ff, 0xffff33ff, 0xffcc33ff,
@@ -159,6 +259,11 @@ bool Palette::magicaVoxel() {
 		0xff002200, 0xff001100, 0xffee0000, 0xffdd0000, 0xffbb0000, 0xffaa0000, 0xff880000, 0xff770000, 0xff550000,
 		0xff440000, 0xff220000, 0xff110000, 0xffeeeeee, 0xffdddddd, 0xffbbbbbb, 0xffaaaaaa, 0xff888888, 0xff777777,
 		0xff555555, 0xff444444, 0xff222222, 0xff111111};
+
+	uint32_t *swapBuf = palette;
+	for (int i = 0; i < lengthof(palette); ++i) {
+		swapBuf[i] = SDL_SwapLE32(swapBuf[i]);
+	}
 	return load((const uint8_t *)palette, sizeof(palette));
 }
 
@@ -182,40 +287,20 @@ bool Palette::createPalette(const image::ImagePtr &image, voxel::Palette &palett
 	const int imageWidth = image->width();
 	const int imageHeight = image->height();
 	Log::debug("Create palette for image: %s", image->name().c_str());
-	core::Map<uint32_t, bool, 64> colorset;
 	uint16_t paletteIndex = 0;
 	uint32_t empty = core::Color::getRGBA(core::Color::White);
-	colorset.put(empty, true);
 	palette.colors[paletteIndex++] = empty;
 	palette._dirty = true;
 	for (int x = 0; x < imageWidth; ++x) {
 		for (int y = 0; y < imageHeight; ++y) {
 			const uint8_t *data = image->at(x, y);
-			const uint32_t rgba =
-				core::Color::getRGBA(core::Color::alpha(core::Color::fromRGBA(*(uint32_t *)data), 1.0f));
-			if (colorset.find(rgba) != colorset.end()) {
-				continue;
-			}
-			colorset.put(rgba, true);
-			if (paletteIndex >= colors) {
-				Log::warn("Palette indices exceeded - only %i colors were loaded", colors);
-				return true;
-			}
-			palette.colors[paletteIndex++] = rgba;
+			palette.addColorToPalette(*(uint32_t*)data);
 		}
 	}
 	for (int i = paletteIndex; i < colors; ++i) {
 		palette.colors[i] = empty;
 	}
 	return true;
-}
-
-bool Palette::isDirty() const {
-	return _dirty;
-}
-
-void Palette::markClean() {
-	_dirty = false;
 }
 
 bool Palette::hasGlow(uint8_t idx) const {
@@ -234,16 +319,22 @@ void Palette::setGlow(uint8_t idx, float factor) {
 }
 
 void Palette::toVec4f(core::DynamicArray<glm::vec4> &vec4f) const {
-	vec4f.reserve(colorCount);
+	vec4f.reserve(PaletteMaxColors);
 	for (int i = 0; i < colorCount; ++i) {
 		vec4f.push_back(core::Color::fromRGBA(colors[i]));
+	}
+	for (int i = colorCount; i < PaletteMaxColors; ++i) {
+		vec4f.emplace_back(0.0f);
 	}
 }
 
 void Palette::glowToVec4f(core::DynamicArray<glm::vec4> &vec4f) const {
-	vec4f.reserve(colorCount);
+	vec4f.reserve(PaletteMaxColors);
 	for (int i = 0; i < colorCount; ++i) {
 		vec4f.push_back(core::Color::fromRGBA(glowColors[i]));
+	}
+	for (int i = colorCount; i < PaletteMaxColors; ++i) {
+		vec4f.emplace_back(0.0f);
 	}
 }
 

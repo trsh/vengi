@@ -7,12 +7,15 @@
 #include "core/Assert.h"
 #include "core/Singleton.h"
 #include <glm/gtc/epsilon.hpp>
+#include "core/Var.h"
 #include "math/AABB.h"
 #include "core/GLM.h"
 #include "math/Ray.h"
+#include <glm/ext/scalar_constants.hpp>
 #include <glm/gtc/matrix_access.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/compatibility.hpp>
 #include <glm/gtx/norm.hpp>
 
 namespace video {
@@ -279,9 +282,42 @@ void Camera::updateTarget() {
 	_dirty |= DIRTY_POSITION;
 }
 
+void Camera::updateZoom(double deltaFrameSeconds) {
+	if (!_lerpZoom) {
+		return;
+	}
+	float maxZoom = core::Var::getSafe(cfg::ClientCameraMaxZoom)->floatVal();
+	float minZoom = core::Var::getSafe(cfg::ClientCameraMinZoom)->floatVal();
+	if (minZoom >= maxZoom) {
+		maxZoom = 1000.0f;
+		minZoom = 1.0f;
+		core::Var::getSafe(cfg::ClientCameraMaxZoom)->setVal(maxZoom);
+		core::Var::getSafe(cfg::ClientCameraMinZoom)->setVal(minZoom);
+	}
+	if (_mode == CameraMode::Orthogonal) {
+		if (glm::abs(_orthoZoom - _targetZoom) <= 0.001f) {
+			_lerpZoom = false;
+			return;
+		}
+		const float lerpedZoom = glm::lerp(_orthoZoom, _targetZoom, (float)deltaFrameSeconds);
+		_orthoZoom = glm::clamp(lerpedZoom, minZoom, maxZoom);
+		_dirty |= DIRTY_PERSPECTIVE;
+		return;
+	}
+	const float oldTargetDist = targetDistance();
+	if (glm::abs(_targetZoom - oldTargetDist) < 0.001f) {
+		_lerpZoom = false;
+		return;
+	}
+	const float lerpedZoom = glm::lerp(oldTargetDist, _targetZoom, (float)deltaFrameSeconds * 10.0f);
+	const float targetDist = glm::clamp(lerpedZoom, minZoom, maxZoom);
+	setTargetDistance(targetDist);
+}
+
 void Camera::update(double deltaFrameSeconds) {
 	if (deltaFrameSeconds > 0.0) {
 		rotate(_omega * (float)deltaFrameSeconds);
+		updateZoom(deltaFrameSeconds);
 	}
 	updateTarget();
 	updateOrientation();
@@ -463,16 +499,11 @@ glm::vec4 Camera::sphereBoundingBox() const {
 
 void Camera::zoom(float value) {
 	if (_mode == CameraMode::Orthogonal) {
-		_orthoZoom = glm::clamp(_orthoZoom - value * 0.01f, 0.1f, 1000.0f);
-		_dirty |= DIRTY_PERSPECTIVE;
-		return;
+		_targetZoom = _orthoZoom + value;
+	} else {
+		_targetZoom = targetDistance() + value;
 	}
-	const float targetDist = glm::clamp(targetDistance() + value, 0.0f, 1000.0f);
-	if (targetDist > 1.0f) {
-		const glm::vec3& moveDelta = glm::backward * value;
-		move(moveDelta);
-		setTargetDistance(targetDist);
-	}
+	_lerpZoom = true;
 }
 
 glm::mat4 Camera::orthogonalMatrix(float nplane, float fplane) const {
