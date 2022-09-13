@@ -915,7 +915,7 @@ bool GLTFFormat::loadGltfNode_r(const core::String &filename, SceneGraph &sceneG
 	Log::debug(" - skin: %i", gltfNode.skin);
 	Log::debug(" - children: %i", (int)gltfNode.children.size());
 
-	bool naiveImport = true;
+	const bool naiveImport = core::Var::getSafe(cfg::VoxformatVoxelMesh)->boolVal();
 
 	if (gltfNode.camera != -1) {
 		const SceneGraphTransform &transform = loadGltfTransform(gltfNode);
