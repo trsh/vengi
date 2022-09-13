@@ -1040,7 +1040,7 @@ bool GLTFFormat::loadGltfNode_r(const core::String &filename, SceneGraph &sceneG
 	Log::debug("region mins(%i:%i:%i)/maxs(%i:%i:%i)", imins.x, imins.y, imins.z, imaxs.x, imaxs.y, imaxs.z);
 
 	SceneGraphNode node;
-	SceneGraphTransform &transform = loadGltfTransform(gltfNode);
+	SceneGraphTransform transform = loadGltfTransform(gltfNode);
 	transform.setPivot(-regionOffset / glm::vec3(vdim));
 	node.setName(gltfNode.name.c_str());
 	KeyFrameIndex keyFrameIdx = 0;
