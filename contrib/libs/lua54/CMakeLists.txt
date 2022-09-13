@@ -58,7 +58,28 @@ if (NOT LUA54_FOUND)
 	configure_lua(${LIB})
 endif()
 
-find_program(LUAC_EXECUTABLE NAMES luac luac5.2 luac5.3 luac5.4)
+find_program(LUAC_EXECUTABLE NAMES luac luac5.4)
+if (LUAC_EXECUTABLE)
+	execute_process(
+		COMMAND "${LUAC_EXECUTABLE}" -v
+		OUTPUT_VARIABLE LUAC_VERSION_LINE
+		OUTPUT_STRIP_TRAILING_WHITESPACE
+	)
+	separate_arguments(LUAC_VERSION_LINE)
+	if (LUAC_VERSION_LINE)
+		list(GET LUAC_VERSION_LINE 1 LUAC_VERSION)
+		if (LUAC_VERSION VERSION_LESS "5.4")
+			unset(LUAC_EXECUTABLE)
+			message(STATUS "luac version ${LUAC_VERSION} found - ignore this one")
+		else()
+			message(STATUS "luac version ${LUAC_VERSION} found")
+		endif()
+	else()
+		unset(LUAC_EXECUTABLE)
+		message(STATUS "Failed to parse luac version ${LUAC_VERSION_LINE}")
+	endif()
+endif()
+
 if (NOT LUAC_EXECUTABLE)
 	message(STATUS "luac not found - use bundled version")
 	add_executable(luac luac.c ${SRCS})
