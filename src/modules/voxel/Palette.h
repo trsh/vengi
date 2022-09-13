@@ -13,6 +13,7 @@
 
 namespace voxel {
 
+static int defaultPaletteIndex = 0;
 static constexpr int PaletteMaxColors = 256;
 // RGBA color values in the range [0-255]
 using PaletteColorArray = core::RGBA[PaletteMaxColors];
@@ -90,7 +91,7 @@ public:
 	 * to remove a color that is most similar to another already existing color in the palette.
 	 * @note Only use this for single colors - not for a lot of them. This method is quite slow
 	 */
-	bool addColorToPalette(core::RGBA rgba, bool skipSimilar = true);
+	bool addColorToPalette(core::RGBA rgba, bool skipSimilar = true, int &index = defaultPaletteIndex);
 	void quantize(const core::RGBA *inputColors, const size_t inputColorCount);
 	/**
 	 * @brief Convert the RGBA color values in the range [0-255] to float color values in the range [0.0-1.0]

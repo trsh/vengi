@@ -12,28 +12,28 @@
 #include "core/String.h"
 #include "core/StringUtil.h"
 #include "core/Var.h"
+#include "core/collection/DynamicArray.h"
 #include "core/concurrent/Lock.h"
 #include "core/concurrent/ThreadPool.h"
 #include "engine-config.h"
 #include "image/Image.h"
-#include "io/StdStreamBuf.h"
 #include "io/Filesystem.h"
+#include "io/StdStreamBuf.h"
 #include "voxel/MaterialColor.h"
 #include "voxel/Mesh.h"
 #include "voxel/Palette.h"
+#include "voxel/PaletteLookup.h"
 #include "voxel/RawVolumeWrapper.h"
 #include "voxel/VoxelVertex.h"
-#include "core/collection/DynamicArray.h"
 #include "voxelformat/SceneGraph.h"
 #include "voxelformat/SceneGraphNode.h"
-#include "voxel/PaletteLookup.h"
 #include "voxelutil/VoxelUtil.h"
 
 #include <future>
-#include <limits.h>
 #include <glm/ext/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <limits.h>
 
 #define TINYGLTF_IMPLEMENTATION
 // #define TINYGLTF_NO_FS // TODO: use our own file abstraction
@@ -496,10 +496,11 @@ const tinygltf::Accessor *GLTFFormat::getGltfAccessor(const tinygltf::Model &mod
 
 namespace gltf_priv {
 
-template<typename T>
-void copyGltfIndices(const uint8_t *data, size_t count, size_t stride, core::DynamicArray<uint32_t> &indices, uint32_t offset) {
+template <typename T>
+void copyGltfIndices(const uint8_t *data, size_t count, size_t stride, core::DynamicArray<uint32_t> &indices,
+					 uint32_t offset) {
 	for (size_t i = 0; i < count; i++) {
-		indices.push_back((uint32_t)(*(const T*)data) + offset);
+		indices.push_back((uint32_t)(*(const T *)data) + offset);
 		data += stride;
 	}
 }
@@ -509,12 +510,12 @@ void copyGltfIndices(const uint8_t *data, size_t count, size_t stride, core::Dyn
 voxelformat::SceneGraphTransform GLTFFormat::loadGltfTransform(const tinygltf::Node &gltfNode) const {
 	SceneGraphTransform transform;
 	if (gltfNode.matrix.size() == 16) {
-		transform.setLocalMatrix(glm::mat4((float)gltfNode.matrix[0], (float)gltfNode.matrix[1], (float)gltfNode.matrix[2],
-									  (float)gltfNode.matrix[3], (float)gltfNode.matrix[4], (float)gltfNode.matrix[5],
-									  (float)gltfNode.matrix[6], (float)gltfNode.matrix[7], (float)gltfNode.matrix[8],
-									  (float)gltfNode.matrix[9], (float)gltfNode.matrix[10], (float)gltfNode.matrix[11],
-									  (float)gltfNode.matrix[12], (float)gltfNode.matrix[13],
-									  (float)gltfNode.matrix[14], (float)gltfNode.matrix[15]));
+		transform.setLocalMatrix(glm::mat4(
+			(float)gltfNode.matrix[0], (float)gltfNode.matrix[1], (float)gltfNode.matrix[2], (float)gltfNode.matrix[3],
+			(float)gltfNode.matrix[4], (float)gltfNode.matrix[5], (float)gltfNode.matrix[6], (float)gltfNode.matrix[7],
+			(float)gltfNode.matrix[8], (float)gltfNode.matrix[9], (float)gltfNode.matrix[10],
+			(float)gltfNode.matrix[11], (float)gltfNode.matrix[12], (float)gltfNode.matrix[13],
+			(float)gltfNode.matrix[14], (float)gltfNode.matrix[15]));
 	} else {
 		glm::mat4 scaleMat(1.0f);
 		glm::mat4 rotMat(1.0f);
@@ -538,7 +539,8 @@ voxelformat::SceneGraphTransform GLTFFormat::loadGltfTransform(const tinygltf::N
 	return transform;
 }
 
-bool GLTFFormat::loadGltfIndices(const tinygltf::Model &model, const tinygltf::Primitive &primitive, core::DynamicArray<uint32_t> &indices, size_t indicesOffset) const {
+bool GLTFFormat::loadGltfIndices(const tinygltf::Model &model, const tinygltf::Primitive &primitive,
+								 core::DynamicArray<uint32_t> &indices, size_t indicesOffset) const {
 	if (primitive.mode != TINYGLTF_MODE_TRIANGLES) {
 		Log::warn("Unexpected primitive mode: %i", primitive.mode);
 		return false;
@@ -549,8 +551,8 @@ bool GLTFFormat::loadGltfIndices(const tinygltf::Model &model, const tinygltf::P
 		return false;
 	}
 	const size_t size = getGltfAccessorSize(*accessor);
-	const tinygltf::BufferView& bufferView = model.bufferViews[accessor->bufferView];
-	const tinygltf::Buffer& buffer = model.buffers[bufferView.buffer];
+	const tinygltf::BufferView &bufferView = model.bufferViews[accessor->bufferView];
+	const tinygltf::Buffer &buffer = model.buffers[bufferView.buffer];
 	const size_t stride = bufferView.byteStride ? bufferView.byteStride : size;
 
 	const size_t offset = accessor->byteOffset + bufferView.byteOffset;
@@ -662,7 +664,7 @@ bool GLTFFormat::loadGlftAttributes(const core::String &filename, core::StringMa
 					core::String name = image.uri.c_str();
 					if (!textures.hasKey(name)) {
 						if (!core::string::isAbsolutePath(name)) {
-							const core::String& path = core::string::extractPath(filename);
+							const core::String &path = core::string::extractPath(filename);
 							Log::debug("Search image %s in path %s", name.c_str(), path.c_str());
 							name = path + name;
 						}
@@ -707,7 +709,8 @@ bool GLTFFormat::loadGlftAttributes(const core::String &filename, core::StringMa
 		const size_t stride = attributeBufferView.byteStride ? attributeBufferView.byteStride : size;
 		const tinygltf::Buffer &attributeBuffer = model.buffers[attributeBufferView.buffer];
 		const size_t offset = attributeAccessor->byteOffset + attributeBufferView.byteOffset;
-		Log::debug("%s: %i (offset: %i, stride: %i)", attrType.c_str(), (int)attributeAccessor->count, (int)offset, (int)stride);
+		Log::debug("%s: %i (offset: %i, stride: %i)", attrType.c_str(), (int)attributeAccessor->count, (int)offset,
+				   (int)stride);
 		const uint8_t *buf = attributeBuffer.data.data() + offset;
 		if (attrType == "POSITION") {
 			if (attributeAccessor->componentType != TINYGLTF_COMPONENT_TYPE_FLOAT) {
@@ -740,14 +743,16 @@ bool GLTFFormat::loadGlftAttributes(const core::String &filename, core::StringMa
 				core_assert(attributeAccessor->type == TINYGLTF_TYPE_VEC4);
 				for (size_t i = 0; i < attributeAccessor->count; i++) {
 					const float *colorData = (const float *)(buf);
-					vertices[verticesOffset + i].color = core::Color::getRGBA(glm::vec4(colorData[0], colorData[1], colorData[2], colorData[3]));
+					vertices[verticesOffset + i].color =
+						core::Color::getRGBA(glm::vec4(colorData[0], colorData[1], colorData[2], colorData[3]));
 					buf += stride;
 				}
 			} else if (attributeAccessor->componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE) {
 				core_assert(attributeAccessor->type == TINYGLTF_TYPE_VEC4);
 				for (size_t i = 0; i < attributeAccessor->count; i++) {
 					const uint8_t *colorData = buf;
-					vertices[verticesOffset + i].color = core::Color::getRGBA(colorData[0], colorData[1], colorData[2], colorData[3]);
+					vertices[verticesOffset + i].color =
+						core::Color::getRGBA(colorData[0], colorData[1], colorData[2], colorData[3]);
 					buf += stride;
 				}
 			} else {
@@ -764,19 +769,22 @@ bool GLTFFormat::loadGlftAttributes(const core::String &filename, core::StringMa
 bool GLTFFormat::subdivideShape(SceneGraphNode &node, const tinygltf::Model &model,
 								const core::DynamicArray<uint32_t> &indices,
 								const core::DynamicArray<GltfVertex> &vertices,
-								const core::StringMap<image::ImagePtr> &textures) const {
+								const core::StringMap<image::ImagePtr> &textures, const glm::vec3 offset,
+								const bool naiveImport) const {
+
 	const glm::vec3 &scale = getScale();
 	if (indices.size() % 3 != 0) {
 		Log::error("Unexpected amount of indices %i", (int)indices.size());
 		return false;
 	}
-	auto func = [&indices, &vertices, &textures, &scale](size_t indexOffset) {
+	auto func = [&indices, &vertices, &textures, &scale, &offset, &naiveImport](size_t indexOffset) {
 		Tri tri;
 		for (size_t i = 0; i < 3; ++i) {
 			const size_t idx = indices[i + indexOffset];
-			tri.vertices[i] = vertices[idx].pos * scale;
+			tri.vertices[i] = (vertices[idx].pos - offset) * scale;
 			tri.uv[i] = vertices[idx].uv;
 		}
+
 		const size_t textureIdx = indices[indexOffset];
 		const GltfVertex &v = vertices[textureIdx];
 		tri.wrapS = v.wrapS;
@@ -791,7 +799,13 @@ bool GLTFFormat::subdivideShape(SceneGraphNode &node, const tinygltf::Model &mod
 			Log::debug("No texture for vertex found");
 		}
 		TriCollection subdivided;
-		subdivideTri(tri, subdivided);
+
+		if (naiveImport) {
+			subdivided.push_back(tri);
+		} else {
+			subdivideTri(tri, subdivided);
+		}
+
 		return core::move(subdivided);
 	};
 
@@ -804,26 +818,40 @@ bool GLTFFormat::subdivideShape(SceneGraphNode &node, const tinygltf::Model &mod
 	for (size_t indexOffset = 0; indexOffset < maxN; indexOffset += 3) {
 		futures.emplace_back(threadPool.enqueue(func, indexOffset));
 	}
-	voxel::PaletteLookup palLookup;
+
+	voxel::Palette palette;
 	voxel::RawVolume *volume = node.volume();
 	int n = 0;
+
 	for (auto &f : futures) {
 		const TriCollection &tris = f.get();
 		if (!tris.empty()) {
-			PosMap posMap((int)tris.size() * 3);
-			transformTris(tris, posMap);
+			PosMap posMap;
+
+			if (naiveImport) {
+				glm::vec3 triMins = glm::round(tris[0].mins());
+				glm::vec3 triMaxs = glm::round(tris[0].maxs());
+				glm::ivec3 triDimensions = glm::max(glm::abs(triMaxs - triMins), 1.0f);
+				posMap = PosMap(triDimensions.x * triDimensions.y * triDimensions.z);
+				transformTrisNaive(tris, posMap);
+			} else {
+				posMap = PosMap((int)tris.size() * 3);
+				transformTris(tris, posMap);
+			}
+
 			for (const auto &entry : posMap) {
 				const PosSampling &pos = entry->second;
 				const glm::vec4 &color = pos.avgColor();
-				const uint8_t index = palLookup.findClosestIndex(color);
-				const voxel::Voxel voxel = voxel::createVoxel(voxel::VoxelType::Generic, index);
+				int addedPaletteIndex;
+				palette.addColorToPalette(core::Color::getRGBA(color), false, addedPaletteIndex);
+				const voxel::Voxel voxel = voxel::createVoxel(voxel::VoxelType::Generic, addedPaletteIndex);
 				volume->setVoxel(entry->first, voxel);
 			}
 		}
 		++n;
 		Log::debug("%i/%i", n, (int)maxN / 3);
 	}
-	node.setPalette(palLookup.palette());
+	node.setPalette(palette);
 	if (fillHollow) {
 		Log::debug("fill hollows");
 		voxel::RawVolumeWrapper wrapper(volume);
@@ -849,13 +877,17 @@ void GLTFFormat::calculateAABB(const core::DynamicArray<GltfVertex> &vertices, g
 	}
 }
 
-bool GLTFFormat::loadGltfNode_r(const core::String &filename, SceneGraph &sceneGraph, core::StringMap<image::ImagePtr> &textures, const tinygltf::Model &model, int gltfNodeIdx, int parentNodeId) const {
+bool GLTFFormat::loadGltfNode_r(const core::String &filename, SceneGraph &sceneGraph,
+								core::StringMap<image::ImagePtr> &textures, const tinygltf::Model &model,
+								int gltfNodeIdx, int parentNodeId) const {
 	const tinygltf::Node &gltfNode = model.nodes[gltfNodeIdx];
 	Log::debug("Found node with name '%s'", gltfNode.name.c_str());
 	Log::debug(" - camera: %i", gltfNode.camera);
 	Log::debug(" - mesh: %i", gltfNode.mesh);
 	Log::debug(" - skin: %i", gltfNode.skin);
 	Log::debug(" - children: %i", (int)gltfNode.children.size());
+
+	bool naiveImport = true;
 
 	if (gltfNode.camera != -1) {
 		const SceneGraphTransform &transform = loadGltfTransform(gltfNode);
@@ -925,20 +957,44 @@ bool GLTFFormat::loadGltfNode_r(const core::String &filename, SceneGraph &sceneG
 		}
 	}
 	if (indices.empty() || vertices.empty()) {
-		Log::error("No indices (%i) or vertices (%i) found for mesh %i", (int)indices.size(), (int)vertices.size(), gltfNode.mesh);
+		Log::error("No indices (%i) or vertices (%i) found for mesh %i", (int)indices.size(), (int)vertices.size(),
+				   gltfNode.mesh);
 		for (int childId : gltfNode.children) {
 			loadGltfNode_r(filename, sceneGraph, textures, model, childId, parentNodeId);
 		}
 		return false;
 	}
-	Log::debug("Indices (%i) or vertices (%i) found for mesh %i", (int)indices.size(), (int)vertices.size(), gltfNode.mesh);
+	Log::debug("Indices (%i) or vertices (%i) found for mesh %i", (int)indices.size(), (int)vertices.size(),
+			   gltfNode.mesh);
 
 	glm::vec3 mins;
 	glm::vec3 maxs;
 	calculateAABB(vertices, mins, maxs);
-	const glm::ivec3 imins = glm::floor(mins);
-	const glm::ivec3 imaxs = glm::ceil(maxs);
+
+	glm::vec3 regionOffset(0.f);
+	glm::ivec3 imins;
+	glm::ivec3 imaxs;
+
+	if (naiveImport) {
+		const glm::vec3 aabbCenterDelta = (mins + maxs) / 2.0f;
+
+		mins -= aabbCenterDelta;
+		maxs -= aabbCenterDelta;
+
+		imins = glm::round(mins);
+		const glm::vec3 minsDelta = glm::vec3(imins) - mins;
+
+		imaxs = glm::round(maxs + minsDelta);
+		imaxs -= 1;
+
+		regionOffset = aabbCenterDelta - minsDelta;
+	} else {
+		imins = glm::floor(mins);
+		imaxs = glm::ceil(maxs);
+	}
+
 	const voxel::Region region(imins, imaxs);
+
 	if (!region.isValid()) {
 		Log::error("Invalid region found %s", region.toString().c_str());
 		for (int childId : gltfNode.children) {
@@ -947,14 +1003,17 @@ bool GLTFFormat::loadGltfNode_r(const core::String &filename, SceneGraph &sceneG
 		return false;
 	}
 	const glm::ivec3 &vdim = region.getDimensionsInVoxels();
+
 	if (glm::any(glm::greaterThan(vdim, glm::ivec3(512)))) {
 		Log::warn("Large meshes will take a lot of time and use a lot of memory. Consider scaling the mesh! (%i:%i:%i)",
 				  vdim.x, vdim.y, vdim.z);
 	}
+
 	Log::debug("region mins(%i:%i:%i)/maxs(%i:%i:%i)", imins.x, imins.y, imins.z, imaxs.x, imaxs.y, imaxs.z);
 
 	SceneGraphNode node;
-	const SceneGraphTransform &transform = loadGltfTransform(gltfNode);
+	SceneGraphTransform &transform = loadGltfTransform(gltfNode);
+	transform.setPivot(-regionOffset / glm::vec3(vdim));
 	node.setName(gltfNode.name.c_str());
 	KeyFrameIndex keyFrameIdx = 0;
 	node.setTransform(keyFrameIdx++, transform);
@@ -969,19 +1028,19 @@ bool GLTFFormat::loadGltfNode_r(const core::String &filename, SceneGraph &sceneG
 		}
 
 		const std::vector<tinygltf::AnimationChannel> &channels = animation.channels;
-		for (const tinygltf::AnimationChannel& channel : channels) {
+		for (const tinygltf::AnimationChannel &channel : channels) {
 			const int nodeId = channel.target_node;
 			if (nodeId != gltfNodeIdx) {
 				continue;
 			}
 			const tinygltf::AnimationSampler &sampler = animation.samplers[channel.sampler];
-			const std::string& type = channel.target_path;
+			const std::string &type = channel.target_path;
 			InterpolationType interpolation = InterpolationType::Linear;
 			if (sampler.interpolation == "LINEAR") {
 				interpolation = InterpolationType::Linear;
 			} else if (sampler.interpolation == "STEP") {
 				interpolation = InterpolationType::Instant;
-			// } else if (sampler.interpolation == "CUBICSPLINE") {
+				// } else if (sampler.interpolation == "CUBICSPLINE") {
 				// TODO: implement easing for this type
 				// interpolation = InterpolationType::Linear;
 			}
@@ -989,18 +1048,19 @@ bool GLTFFormat::loadGltfNode_r(const core::String &filename, SceneGraph &sceneG
 			// get the key frame seconds (float)
 			{
 				const tinygltf::Accessor *accessor = getGltfAccessor(model, sampler.input);
-				if (accessor == nullptr || accessor->componentType != TINYGLTF_COMPONENT_TYPE_FLOAT || accessor->type != TINYGLTF_TYPE_SCALAR) {
+				if (accessor == nullptr || accessor->componentType != TINYGLTF_COMPONENT_TYPE_FLOAT ||
+					accessor->type != TINYGLTF_TYPE_SCALAR) {
 					Log::warn("Could not get accessor for samplers");
 					continue;
 				}
-				const tinygltf::BufferView& bufferView = model.bufferViews[accessor->bufferView];
-				const tinygltf::Buffer& buffer = model.buffers[bufferView.buffer];
+				const tinygltf::BufferView &bufferView = model.bufferViews[accessor->bufferView];
+				const tinygltf::Buffer &buffer = model.buffers[bufferView.buffer];
 				const size_t stride = bufferView.byteStride ? bufferView.byteStride : 4;
 
 				const size_t offset = accessor->byteOffset + bufferView.byteOffset;
 				const uint8_t *buf = buffer.data.data() + offset;
 				for (size_t i = 0; i < accessor->count; ++i) {
-					const float seconds = *(const float*)buf;
+					const float seconds = *(const float *)buf;
 					node.addKeyFrame((FrameIndex)(seconds * _priv::FPS));
 					buf += stride;
 				}
@@ -1015,8 +1075,8 @@ bool GLTFFormat::loadGltfNode_r(const core::String &filename, SceneGraph &sceneG
 				}
 
 				const size_t size = getGltfAccessorSize(*accessor);
-				const tinygltf::BufferView& bufferView = model.bufferViews[accessor->bufferView];
-				const tinygltf::Buffer& buffer = model.buffers[bufferView.buffer];
+				const tinygltf::BufferView &bufferView = model.bufferViews[accessor->bufferView];
+				const tinygltf::Buffer &buffer = model.buffers[bufferView.buffer];
 				const size_t stride = bufferView.byteStride ? bufferView.byteStride : size;
 
 				const size_t offset = accessor->byteOffset + bufferView.byteOffset;
@@ -1056,7 +1116,7 @@ bool GLTFFormat::loadGltfNode_r(const core::String &filename, SceneGraph &sceneG
 	voxel::RawVolume *volume = new voxel::RawVolume(region);
 	node.setVolume(volume, true);
 	int newParent = parentNodeId;
-	if (!subdivideShape(node, model, indices, vertices, textures)) {
+	if (!subdivideShape(node, model, indices, vertices, textures, regionOffset, naiveImport)) {
 		Log::error("Failed to subdivide node %i", gltfNodeIdx);
 	} else {
 		newParent = sceneGraph.emplace(core::move(node), parentNodeId);
@@ -1068,6 +1128,7 @@ bool GLTFFormat::loadGltfNode_r(const core::String &filename, SceneGraph &sceneG
 	for (int childId : gltfNode.children) {
 		loadGltfNode_r(filename, sceneGraph, textures, model, childId, newParent);
 	}
+
 	return true;
 }
 
@@ -1075,7 +1136,7 @@ bool GLTFFormat::loadGroups(const core::String &filename, io::SeekableReadStream
 	uint32_t magic;
 	stream.peekUInt32(magic);
 	const int64_t size = stream.size();
-	uint8_t* data = (uint8_t*)core_malloc(size);
+	uint8_t *data = (uint8_t *)core_malloc(size);
 	if (stream.read(data, size) == -1) {
 		Log::error("Failed to read gltf stream");
 		core_free(data);
@@ -1088,15 +1149,17 @@ bool GLTFFormat::loadGroups(const core::String &filename, io::SeekableReadStream
 	const core::String filePath = core::string::extractPath(filename);
 	tinygltf::TinyGLTF loader;
 	tinygltf::Model model;
-	if (magic == FourCC('g','l','T','F')) {
+	if (magic == FourCC('g', 'l', 'T', 'F')) {
 		Log::debug("Detected binary gltf stream");
-		state = loader.LoadBinaryFromMemory(&model, &err, nullptr, data, size, filePath.c_str(), tinygltf::SectionCheck::NO_REQUIRE);
+		state = loader.LoadBinaryFromMemory(&model, &err, nullptr, data, size, filePath.c_str(),
+											tinygltf::SectionCheck::NO_REQUIRE);
 		if (!state) {
 			Log::error("Failed to load binary gltf file: %s", err.c_str());
 		}
 	} else {
 		Log::debug("Detected ascii gltf stream");
-		state = loader.LoadASCIIFromString(&model, &err, nullptr, (const char *)data, size, filePath.c_str(), tinygltf::SectionCheck::NO_REQUIRE);
+		state = loader.LoadASCIIFromString(&model, &err, nullptr, (const char *)data, size, filePath.c_str(),
+										   tinygltf::SectionCheck::NO_REQUIRE);
 		if (!state) {
 			Log::error("Failed to load ascii gltf file: %s", err.c_str());
 		}
@@ -1121,7 +1184,7 @@ bool GLTFFormat::loadGroups(const core::String &filename, io::SeekableReadStream
 	Log::debug("Lights: %i", (int)model.lights.size());
 	const int parentNodeId = sceneGraph.root().id();
 
-	SceneGraphNode& root = sceneGraph.node(parentNodeId);
+	SceneGraphNode &root = sceneGraph.node(parentNodeId);
 	if (!model.asset.generator.empty()) {
 		root.setProperty("Generator", model.asset.generator.c_str());
 	}
